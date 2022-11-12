@@ -1,0 +1,177 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "main"
+      - "master"
+      - "dev"
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+
+  pull_request:
+    branches:
+      - "main"
+      - "dev"
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+
+  release:
+    types:
+      - "prereleased"
+      - "published"
+      - "released"
+
+  # For test
+  workflow_dispatch:
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    env:
+      CARGO_TERM_COLOR: always
+    name: ${{ matrix.config.target_triple }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "Windows-x86_64",
+              artifact: "Windows-x86_64",
+              os: windows-latest,
+              has_release: true,
+              rust: stable,
+              target_triple: x86_64-pc-windows-msvc,
+            }
+          - {
+              name: "Linux",
+              artifact: "Linux-x86_64",
+              os: ubuntu-latest,
+              has_release: true,
+              rust: stable,
+              target_triple: x86_64-unknown-linux-musl,
+            }
+          - {
+              name: "Linux",
+              artifact: "Linux-arm64",
+              os: ubuntu-latest,
+              has_release: true,
+              rust: stable,
+              target_triple: aarch64-unknown-linux-musl,
+            }
+          - {
+              name: "macOS-x64",
+              artifact: "macOS-x64",
+              os: macos-latest,
+              rust: stable,
+              has_release: true,
+              target_triple: x86_64-apple-darwin,
+            }
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: macOS - Build preparation - Install Packages
+        if: matrix.config.os == 'macos-latest'
+        run: |
+          brew install coreutils
+
+      - name: 源代码仓库信息
+        id: repo_info
+        shell: bash
+        env:
+          SOURCE_URL: ${{ github.repository }}
+        run: |
+          export SOURCE_OWNER="$(echo $SOURCE_URL | awk -F '/' '{print $(NF-1)}')"
+          echo "SOURCE_OWNER=$SOURCE_OWNER" >> $GITHUB_ENV
+          echo "SOURCE_OWNER=${SOURCE_OWNER}" >> $GITHUB_OUTPUT
+          export SOURCE_REPO="$(echo $SOURCE_URL | awk -F '/' '{print $(NF)}')"
+          echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
+          echo "SOURCE_REPO=${SOURCE_REPO}" >> $GITHUB_OUTPUT
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.config.rust }}
+          target: ${{ matrix.config.target_triple }}
+          override: true
+          profile: minimal
+
+      - name: Get rust version
+        id: rust-version
+        run: |
+          echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
+
+      - name: Cache cargo index
+        uses: actions/cache@v3.0.11
+        with:
+          path: ~/.cargo/registry/index
+          key: index-${{ runner.os }}-${{ matrix.config.target_triple }}-${{ github.run_number }}
+          restore-keys: |
+            index-${{ runner.os }}-${{ matrix.config.target_triple }}-
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3.0.11
+        with:
+          path: ~/.cargo/registry/cache
+          key: registry-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ matrix.config.target_triple }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Fetch dependencies
+        run: cargo fetch
+
+      - name: Cache target directory
+        uses: actions/cache@v3.0.11
+        with:
+          path: target
+          key: cache-target-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build
+        shell: bash
+        run: |
+          if [[ ${{ matrix.config.target_triple }} != x86_64* ]]; then
+              docker run --rm -v "$(pwd)":/home/rust/src -v "$HOME/.cargo/registry":/root/.cargo/registry ghcr.io/messense/rust-musl-cross:aarch64-musl cargo build --release
+          else
+              cargo build --release --target=${{ matrix.config.target_triple }}
+          fi
+
+      - name: Run tests
+        shell: bash
+        run: |
+          if [[ ${{ matrix.config.target_triple }} != x86_64* ]]; then
+              echo "skip"
+          else
+              cargo test --release --target=${{ matrix.config.target_triple }}
+          fi
+
+      - name: 整理
+        shell: bash
+        run: |
+          mkdir release-tmp
+          cp ./target/${{matrix.config.target_triple}}/release/${{ steps.repo_info.outputs.SOURCE_REPO }} ./release-tmp/
+
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.repo_info.outputs.SOURCE_REPO }}-${{ github.sha }}-${{ matrix.config.artifact }}
+          path: release-tmp
+
+      - name: Get the version
+        if: github.event_name == 'release' && matrix.config.has_release
+        id: get_version
+        run: |
+          echo "VERSION=$(echo $GITHUB_REF | cut -d / -f 3)" >> $GITHUB_OUTPUT
+
+      - name: Upload to GitHub Release
+        uses: svenstaro/upload-release-action@v2
+        if: github.event_name == 'release' && matrix.config.has_release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.repo_info.outputs.SOURCE_REPO }}
+          asset_name: ${{ steps.repo_info.outputs.SOURCE_REPO }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}
+          tag: ${{ github.ref }}
+          overwrite: true
