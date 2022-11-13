@@ -1,7 +1,8 @@
 name: auto-merge
 
 on:
-  pull_request:
+  pull_request_target:
+    types: [labeled]
 
 jobs:
   dependabot-auto-merge:
