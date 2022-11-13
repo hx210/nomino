@@ -176,3 +176,50 @@ jobs:
           asset_name: ${{ steps.repo_info.outputs.SOURCE_REPO }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}
           tag: ${{ github.ref }}
           overwrite: true
+
+  deploy:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          if_no_artifact_found: warn
+
+      - name: 显示下载的内容
+        run: |
+          ls -lha
+
+      - name: 压缩文件
+        run: |
+          system_type=$(uname)
+          system_arch=$(uname -m)
+          lujin="$(find "$PWD" -maxdepth 1 -type d -name "*${system_type}*${system_arch}")"
+          chmod +x ./*/*
+          sudo cp -f "${lujin}/nomino" /usr/local/bin/
+          nomino -p -r "(.*)-.*-(.*)-(.*)" "{}-{}-{}"
+          current_path_folder=$(find . -type d -print)
+          for i in ${current_path_folder}; do
+              echo "${i}"
+              filename=$(basename "${i}")
+              if ! mv "${i}"/nomino "${filename,,}";then
+                  if ! mv "${i}"/nomino.exe "${filename,,}";then
+                      continue
+                  fi
+              fi
+              rm -r "${i}"
+          done
+          nomino -p -r "(.*)-.*-(.*)-(.*)" "{}-{}-{}"
+          zstd ./nomino*
+
+      - name: 显示下载的内容
+        run: |
+          ls -lha
+          find . -type f -print0 | xargs -0 sha1sum >./sha1
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "nomino*"
+          bodyFile: "sha1"
+          tag: "dev"
