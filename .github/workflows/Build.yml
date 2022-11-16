@@ -32,10 +32,36 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  init:
+    runs-on: ubuntu-latest
+    outputs:
+      SOURCE_OWNER: ${{ steps.repo_info.outputs.SOURCE_OWNER }}
+      SOURCE_REPO: ${{ steps.repo_info.outputs.SOURCE_REPO }}
+      BINARY_NAME: ${{ steps.binary.outputs.NAME }}
+    steps:
+      - name: 源代码仓库信息
+        id: repo_info
+        shell: bash
+        env:
+          SOURCE_URL: ${{ github.repository }}
+        run: |
+          export SOURCE_OWNER="$(echo $SOURCE_URL | awk -F '/' '{print $(NF-1)}')"
+          echo "SOURCE_OWNER=$SOURCE_OWNER" >> $GITHUB_ENV
+          echo "SOURCE_OWNER=${SOURCE_OWNER}" >> $GITHUB_OUTPUT
+          export SOURCE_REPO="$(echo $SOURCE_URL | awk -F '/' '{print $(NF)}')"
+          echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
+          echo "SOURCE_REPO=${SOURCE_REPO}" >> $GITHUB_OUTPUT
+
+      - name: 生成文件名
+        id: binary
+        run: |
+          echo "NAME=${SOURCE_REPO}" >> $GITHUB_OUTPUT
+
   build:
     env:
       CARGO_TERM_COLOR: always
     name: ${{ matrix.config.target_triple }}
+    needs: [init]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
@@ -81,19 +107,6 @@ jobs:
         if: matrix.config.os == 'macos-latest'
         run: |
           brew install coreutils
-
-      - name: 源代码仓库信息
-        id: repo_info
-        shell: bash
-        env:
-          SOURCE_URL: ${{ github.repository }}
-        run: |
-          export SOURCE_OWNER="$(echo $SOURCE_URL | awk -F '/' '{print $(NF-1)}')"
-          echo "SOURCE_OWNER=$SOURCE_OWNER" >> $GITHUB_ENV
-          echo "SOURCE_OWNER=${SOURCE_OWNER}" >> $GITHUB_OUTPUT
-          export SOURCE_REPO="$(echo $SOURCE_URL | awk -F '/' '{print $(NF)}')"
-          echo "SOURCE_REPO=$SOURCE_REPO" >> $GITHUB_ENV
-          echo "SOURCE_REPO=${SOURCE_REPO}" >> $GITHUB_OUTPUT
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -153,12 +166,12 @@ jobs:
         shell: bash
         run: |
           mkdir release-tmp
-          cp ./target/${{matrix.config.target_triple}}/release/${{ steps.repo_info.outputs.SOURCE_REPO }} ./release-tmp/
+          cp ./target/${{matrix.config.target_triple}}/release/${{ needs.init.outputs.BINARY_NAME}} ./release-tmp/
 
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.repo_info.outputs.SOURCE_REPO }}-${{ github.sha }}-${{ matrix.config.artifact }}
+          name: ${{ needs.init.outputs.BINARY_NAME}}-${{ github.sha }}-${{ matrix.config.artifact }}
           path: release-tmp
 
       - name: Get the version
@@ -172,13 +185,13 @@ jobs:
         if: github.event_name == 'release' && matrix.config.has_release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ steps.repo_info.outputs.SOURCE_REPO }}
-          asset_name: ${{ steps.repo_info.outputs.SOURCE_REPO }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}
+          file: ${{ needs.init.outputs.BINARY_NAME}}
+          asset_name: ${{ needs.init.outputs.BINARY_NAME}}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}
           tag: ${{ github.ref }}
           overwrite: true
 
   deploy:
-    needs: [build]
+    needs: [init, build]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
@@ -197,21 +210,20 @@ jobs:
           system_arch=$(uname -m)
           lujin="$(find "$PWD" -maxdepth 1 -type d -name "*${system_type}*${system_arch}")"
           chmod +x ./*/*
-          sudo cp -f "${lujin}/nomino" /usr/local/bin/
+          sudo cp -f "${lujin}/${{ needs.init.outputs.BINARY_NAME}}" /usr/local/bin/
           nomino -p -r "(.*)-.*-(.*)-(.*)" "{}-{}-{}"
           current_path_folder=$(find . -type d -print)
           for i in ${current_path_folder}; do
               echo "${i}"
               filename=$(basename "${i}")
-              if ! mv "${i}"/nomino "${filename,,}";then
-                  if ! mv "${i}"/nomino.exe "${filename,,}";then
+              if ! mv "${i}"/${{ needs.init.outputs.BINARY_NAME}} "${filename,,}";then
+                  if ! mv "${i}"/${{ needs.init.outputs.BINARY_NAME}}.exe "${filename,,}";then
                       continue
                   fi
               fi
               rm -r "${i}"
           done
-          nomino -p -r "(.*)-.*-(.*)-(.*)" "{}-{}-{}"
-          zstd ./nomino*
+          zstd ./${{ needs.init.outputs.BINARY_NAME}}*
 
       - name: 显示下载的内容
         run: |
@@ -219,7 +231,9 @@ jobs:
           find . -type f -print0 | xargs -0 sha1sum >./sha1
 
       - uses: ncipollo/release-action@v1
+        if: github.event_name == 'push'
         with:
-          artifacts: "nomino*"
+          artifacts: "${{ needs.init.outputs.BINARY_NAME}}*"
           bodyFile: "sha1"
           tag: "dev"
+          allowUpdates: true
