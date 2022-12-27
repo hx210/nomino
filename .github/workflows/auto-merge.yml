@@ -2,7 +2,7 @@ name: auto-merge
 
 on:
   pull_request_target:
-    types: [labeled]
+  workflow_dispatch:
 
 jobs:
   dependabot-auto-merge:
