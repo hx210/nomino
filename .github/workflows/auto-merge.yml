@@ -16,6 +16,7 @@ on:
   check_suite:
     types:
       - completed
+  workflow_dispatch:
   status: {}
 jobs:
   automerge:
