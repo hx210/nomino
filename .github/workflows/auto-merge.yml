@@ -18,6 +18,10 @@ on:
       - completed
   workflow_dispatch:
   status: {}
+permissions:
+  pull-requests: write
+  contents: write
+
 jobs:
   automerge:
     runs-on: ubuntu-latest
