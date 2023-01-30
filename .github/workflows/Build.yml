@@ -122,7 +122,7 @@ jobs:
           echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
 
       - name: Cache cargo index
-        uses: actions/cache@v3.2.3
+        uses: actions/cache@v3.2.4
         with:
           path: ~/.cargo/registry/index
           key: index-${{ runner.os }}-${{ matrix.config.target_triple }}-${{ github.run_number }}
@@ -130,7 +130,7 @@ jobs:
             index-${{ runner.os }}-${{ matrix.config.target_triple }}-
 
       - name: Cache cargo registry
-        uses: actions/cache@v3.2.3
+        uses: actions/cache@v3.2.4
         with:
           path: ~/.cargo/registry/cache
           key: registry-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ matrix.config.target_triple }}-${{ hashFiles('Cargo.lock') }}
@@ -139,7 +139,7 @@ jobs:
         run: cargo fetch
 
       - name: Cache target directory
-        uses: actions/cache@v3.2.3
+        uses: actions/cache@v3.2.4
         with:
           path: target
           key: cache-target-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.lock') }}
