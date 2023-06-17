@@ -91,14 +91,6 @@ jobs:
               rust: stable,
               target_triple: aarch64-unknown-linux-musl,
             }
-          - {
-              name: "macOS-x64",
-              artifact: "macOS-x64",
-              os: macos-latest,
-              rust: stable,
-              has_release: true,
-              target_triple: x86_64-apple-darwin,
-            }
 
     steps:
       - uses: actions/checkout@v3
@@ -223,17 +215,21 @@ jobs:
               fi
               rm -r "${i}"
           done
-          zstd ./${{ needs.init.outputs.BINARY_NAME}}*
+          f_files=$(find . -name "${{ needs.init.outputs.BINARY_NAME}}*" -type f -print)
+          for i in ${f_files}; do
+              zstd --rm -T0 --ultra -22 "${i}" &
+          done
+          wait
 
       - name: 显示下载的内容
         run: |
           ls -lha
-          find . -type f -print0 | xargs -0 sha1sum >./sha1
+          sudo apt install -y b3sum
+          b3sum * >> b3sum
 
       - uses: ncipollo/release-action@v1
-        if: github.event_name == 'push'
         with:
           artifacts: "${{ needs.init.outputs.BINARY_NAME}}*"
-          bodyFile: "sha1"
+          bodyFile: "b3sum"
           tag: "dev"
           allowUpdates: true
