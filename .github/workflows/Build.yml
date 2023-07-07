@@ -185,6 +185,8 @@ jobs:
   deploy:
     needs: [init, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write    
     steps:
       - name: Download artifact
         id: download-artifact
