@@ -18,7 +18,7 @@ colored = "2.0.4"
 natord = "1.0.9"
 prettytable-rs = "0.10.0"
 regex = "1.9.0"
-serde_json = "1.0.100"
+serde_json = "1.0.104"
 walkdir = "2.3.3"
 
 [dev-dependencies]
