@@ -11,7 +11,7 @@ repository = "https://github.com/yaa110/nomino"
 version = "1.3.0"
 
 [dependencies]
-anyhow = "1.0.75"
+anyhow = "1.0.76"
 atty = "0.2.14"
 clap = {version = "3.2.25", features = ["yaml"]}
 colored = "2.0.4"
