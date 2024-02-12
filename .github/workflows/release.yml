@@ -15,7 +15,7 @@ jobs:
           toolchain: stable
           default: true
       - run: cargo build --release -j`nproc`
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
           path: target/release/nomino
@@ -28,7 +28,7 @@ jobs:
           toolchain: stable
           default: true
       - run: cargo build --release -j`sysctl -n hw.physicalcpu`
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: macos-artifact
           path: target/release/nomino
@@ -41,7 +41,7 @@ jobs:
           toolchain: stable
           default: true
       - run: cargo build --release
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-artifact
           path: target\release\nomino.exe
