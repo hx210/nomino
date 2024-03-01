@@ -161,7 +161,7 @@ jobs:
           cp ./target/${{matrix.config.target_triple}}/release/${{ needs.init.outputs.BINARY_NAME}} ./release-tmp/
 
       - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ needs.init.outputs.BINARY_NAME}}-${{ github.sha }}-${{ matrix.config.artifact }}
           path: release-tmp
